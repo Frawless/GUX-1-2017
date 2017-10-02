@@ -1,0 +1,14 @@
+
+#include <Motif.tmpl>
+#include <Motif.rules>
+
+CC=gcc
+CCOPTIONS=-O -Wall -fno-builtin
+CDEBUGFLAGS=-g
+
+LOCAL_LIBRARIES = XmClientLibs $(XMULIB)
+
+MSimpleProgramTarget(draw)
+
+clean::
+	$(RM) Makefile
