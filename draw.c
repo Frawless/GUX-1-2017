@@ -20,6 +20,8 @@
 #include <Xm/PushB.h>
 #include <Xm/RowColumn.h>
 
+#include <Xm/CascadeB.h>
+
 #include <Xm/Protocols.h>
 #include <X11/Xmu/Editres.h>
 #include <Xm/MessageB.h>
@@ -44,6 +46,18 @@ GC inputGC = 0;			/* GC used for drawing current position */
 
 int x1, y1, x2, y2;		/* input points */
 int button_pressed = 0;		/* input state */
+
+GC gc;
+XGCValues gcv;
+Widget draw;
+String colours[] = {"Black", "Red", "Green", "Blue", "Grey", "White"};
+long int fill_pixel = 1;
+
+/* stores current colour of fill - black default */
+Display *display;
+
+/* xlib id of display */
+Colormap cmap;
 
 /*
  * "InputLine" event handler
@@ -157,7 +171,6 @@ void ClearCB(Widget w, XtPointer client_data, XtPointer call_data)
 /* ARGSUSED */
 void QuitCB(Widget w, XtPointer client_data, XtPointer call_data)
 {
-
     XtManageChild(client_data);
 }
 
@@ -180,15 +193,15 @@ void questionCB(Widget w, XtPointer client_data, XtPointer call_data)
 int main(int argc, char **argv)
 {
     XtAppContext app_context;
-    Widget topLevel, mainWin, frame, drawArea, rowColumn, quitBtn, clearBtn, question;
+    Widget topLevel, mainWin, frame, drawArea, menu, drawMenu, quitBtn, clearBtn, lineSize, chooseShape, chooseColor, question, box, button;
     Atom wm_delete;
-
+    XmString quits, clears, colourss, red, green, blue, black, grey, white;
 
     char *fall[] = {
-        "*question.dialogTitle: Mala otazka",
-        "*question.messageString: Konec aplikace?",
-        "*question.okLabelString: Ano",
-        "*question.cancelLabelString: Ne",
+        "*question.dialogTitle: Quit question",
+        "*question.messageString: Are you sure?",
+        "*question.okLabelString: Yes",
+        "*question.cancelLabelString: No",
         "*question.messageAlignment: XmALIGNMENT_CENTER",
         NULL
     };
@@ -216,6 +229,7 @@ int main(int argc, char **argv)
       XmNcommandWindowLocation, XmCOMMAND_BELOW_WORKSPACE,
       NULL);				/* terminate varargs list */
 
+    // Draw area
     frame = XtVaCreateManagedWidget(
       "frame",				/* widget name */
       xmFrameWidgetClass,		/* widget class */
@@ -229,15 +243,14 @@ int main(int argc, char **argv)
       XmNwidth, 200,			/* set startup width */
       XmNheight, 100,			/* set startup height */
       NULL);				/* terminate varargs list */
-
 /*
     XSelectInput(XtDisplay(drawArea), XtWindow(drawArea),
       KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask
       | Button1MotionMask );
 */
-
-    rowColumn = XtVaCreateManagedWidget(
-      "rowColumn",			/* widget name */
+    // App menu options
+    menu = XtVaCreateManagedWidget(
+      "menu",			/* widget name */
       xmRowColumnWidgetClass,		/* widget class */
       mainWin,				/* parent widget */
       XmNentryAlignment, XmALIGNMENT_CENTER,	/* alignment */
@@ -248,22 +261,50 @@ int main(int argc, char **argv)
     clearBtn = XtVaCreateManagedWidget(
       "Clear",				/* widget name */
       xmPushButtonWidgetClass,		/* widget class */
-      rowColumn,			/* parent widget*/
+      menu,			/* parent widget*/
       NULL);				/* terminate varargs list */
 
     quitBtn = XtVaCreateManagedWidget(
       "Close",				/* widget name */
       xmPushButtonWidgetClass,		/* widget class */
-      rowColumn,			/* parent widget*/
+      menu,			/* parent widget*/
       NULL);				/* terminate varargs list */
 
-    XmMainWindowSetAreas(mainWin, NULL, rowColumn, NULL, NULL, frame);
+    // Draw menu options
+    drawMenu = XtVaCreateManagedWidget(
+      "drawMenu",			/* widget name */
+      xmRowColumnWidgetClass,		/* widget class */
+      mainWin,				/* parent widget */
+      XmNentryAlignment, XmALIGNMENT_CENTER,	/* alignment */
+      XmNorientation, XmHORIZONTAL,	/* orientation */
+      XmNpacking, XmPACK_COLUMN,	/* packing mode */
+      NULL);				/* terminate varargs list */
+
+    chooseShape = XtVaCreateManagedWidget(
+      "chooseShape",				/* widget name */
+      xmPushButtonWidgetClass,		/* widget class */
+      drawMenu,			/* parent widget*/
+      NULL);				/* terminate varargs list */
+
+    lineSize = XtVaCreateManagedWidget(
+      "lineSize",				/* widget name */
+      xmPushButtonWidgetClass,		/* widget class */
+      drawMenu,			/* parent widget*/
+      NULL);				/* terminate varargs list */
+
+    chooseColor = XtVaCreateManagedWidget(
+      "chooseColor",				/* widget name */
+      xmPushButtonWidgetClass,		/* widget class */
+      drawMenu,			/* parent widget*/
+      NULL);				/* terminate varargs list */
+
+
+    XmMainWindowSetAreas(mainWin, NULL, menu, drawMenu, NULL, frame);
+    XtVaSetValues(mainWin, XmNmenuBar, menu, XmNworkWindow, frame, NULL);
 
     XtAddCallback(drawArea, XmNinputCallback, DrawLineCB, drawArea);
     XtAddEventHandler(drawArea, ButtonMotionMask, False, InputLineEH, NULL);
     XtAddCallback(drawArea, XmNexposeCallback, ExposeCB, drawArea);
-
-    XtAddCallback(clearBtn, XmNactivateCallback, ClearCB, drawArea);
 
     // Added
     question = XmCreateQuestionDialog(topLevel, "question", NULL, 0);
@@ -274,11 +315,6 @@ int main(int argc, char **argv)
     XtAddCallback(question, XmNokCallback, questionCB, (XtPointer)0);
     XtAddCallback(question, XmNcancelCallback, questionCB, (XtPointer)1);
 
-    // Added
-    wm_delete = XInternAtom(XtDisplay(topLevel), "WM_DELETE_WINDOW", False);
-    XmAddWMProtocolCallback(topLevel, wm_delete, QuitCB, NULL);
-    XmActivateWMProtocol(topLevel, wm_delete);
-    XtAddEventHandler(topLevel, 0, True, _XEditResCheckMessages, NULL);
 
     // handler for quitBtn (raise question)
     XtAddCallback(quitBtn, XmNactivateCallback, QuitCB, question);
@@ -286,6 +322,11 @@ int main(int argc, char **argv)
     XtAddCallback(clearBtn, XmNactivateCallback, ClearCB, drawArea);
 
     XtRealizeWidget(topLevel);
+    // Added
+    wm_delete = XInternAtom(XtDisplay(topLevel), "WM_DELETE_WINDOW", False);
+    XmAddWMProtocolCallback(topLevel, wm_delete, QuitCB, question);
+    XmActivateWMProtocol(topLevel, wm_delete);
+    XtAddEventHandler(topLevel, 0, True, _XEditResCheckMessages, NULL);
 
     XtAppMainLoop(app_context);
 
