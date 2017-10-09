@@ -59,6 +59,8 @@ Display *display;
 /* xlib id of display */
 Colormap cmap;
 
+Pixel foreground;
+
 /*
  * "InputLine" event handler
  */
@@ -195,7 +197,7 @@ int main(int argc, char **argv)
     XtAppContext app_context;
     Widget topLevel, mainWin, frame, drawArea, menu, drawMenu, quitBtn, clearBtn, lineSize, chooseShape, chooseColor, question, box, button;
     Atom wm_delete;
-    XmString quits, clears, colourss, red, green, blue, black, grey, white;
+    XmString colourss, shape, spoint, sline, square, scircle, widthLine, wzero, wthree, weight;
 
     char *fall[] = {
         "*question.dialogTitle: Quit question",
@@ -243,11 +245,18 @@ int main(int argc, char **argv)
       XmNwidth, 200,			/* set startup width */
       XmNheight, 100,			/* set startup height */
       NULL);				/* terminate varargs list */
+
+    // display = XtDisplay(top);
+    // screen = XtScreen(top);
+    // gc = XCreateGC(display, RootWindowOfScreen(screen), 0, NULL);
+    // XSetForeground(display, gc, fill_pixel);
+
 /*
     XSelectInput(XtDisplay(drawArea), XtWindow(drawArea),
       KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask
       | Button1MotionMask );
 */
+// #######################################################
     // App menu options
     menu = XtVaCreateManagedWidget(
       "menu",			/* widget name */
@@ -270,6 +279,8 @@ int main(int argc, char **argv)
       menu,			/* parent widget*/
       NULL);				/* terminate varargs list */
 
+
+// #######################################################
     // Draw menu options
     drawMenu = XtVaCreateManagedWidget(
       "drawMenu",			/* widget name */
@@ -278,20 +289,57 @@ int main(int argc, char **argv)
       XmNentryAlignment, XmALIGNMENT_CENTER,	/* alignment */
       XmNorientation, XmHORIZONTAL,	/* orientation */
       XmNpacking, XmPACK_COLUMN,	/* packing mode */
-      NULL);				/* terminate varargs list */
+  		// XmNscrolledWindowChildType, XmCOMMAND_WINDOW,
+  		NULL);			/* terminate varargs list */
 
-    chooseShape = XtVaCreateManagedWidget(
-      "chooseShape",				/* widget name */
-      xmPushButtonWidgetClass,		/* widget class */
-      drawMenu,			/* parent widget*/
-      NULL);				/* terminate varargs list */
+    // Shapes
+    shape = XmStringCreateLocalized("Shape:");
+    spoint = XmStringCreateLocalized("Point");
+    sline = XmStringCreateLocalized("Line");
+    square = XmStringCreateLocalized("Square");
+    scircle = XmStringCreateLocalized("Circle");
 
-    lineSize = XtVaCreateManagedWidget(
-      "lineSize",				/* widget name */
-      xmPushButtonWidgetClass,		/* widget class */
-      drawMenu,			/* parent widget*/
-      NULL);				/* terminate varargs list */
+    chooseShape = XmVaCreateSimpleOptionMenu(
+      drawMenu, "chooseShape",
+      shape, XK_S,
+      0,
+      XmVaPUSHBUTTON, spoint, XK_P, NULL, NULL,
+      XmVaPUSHBUTTON, sline, XK_L, NULL, NULL,
+      XmVaPUSHBUTTON, square, XK_S, NULL, NULL,
+      XmVaPUSHBUTTON, scircle, XK_C, NULL, NULL,
+      NULL);
 
+    XtManageChild(chooseShape);
+
+    XmStringFree(shape);
+    XmStringFree(sline);
+    XmStringFree(square);
+    XmStringFree(scircle);
+    XmStringFree(spoint);
+
+    // Line width
+    widthLine = XmStringCreateLocalized("Width:");
+    wzero = XmStringCreateLocalized("0");
+    wthree = XmStringCreateLocalized("3");
+    weight = XmStringCreateLocalized("8");
+
+    lineSize = XmVaCreateSimpleOptionMenu(
+      drawMenu, "lineSize",
+      widthLine, XK_W,
+      0,
+      XmVaPUSHBUTTON, wzero, XK_Z, NULL, NULL,
+      XmVaPUSHBUTTON, wthree, XK_T, NULL, NULL,
+      XmVaPUSHBUTTON, weight, XK_E, NULL, NULL,
+      NULL);
+
+    XtManageChild(lineSize);
+
+    XmStringFree(widthLine);
+    XmStringFree(wzero);
+    XmStringFree(wthree);
+    XmStringFree(weight);
+
+    // Color
     chooseColor = XtVaCreateManagedWidget(
       "chooseColor",				/* widget name */
       xmPushButtonWidgetClass,		/* widget class */
@@ -299,8 +347,8 @@ int main(int argc, char **argv)
       NULL);				/* terminate varargs list */
 
 
-    XmMainWindowSetAreas(mainWin, NULL, menu, drawMenu, NULL, frame);
-    XtVaSetValues(mainWin, XmNmenuBar, menu, XmNworkWindow, frame, NULL);
+    XmMainWindowSetAreas(mainWin, menu, drawMenu, NULL, NULL, frame);
+    // XtVaSetValues(mainWin, XmNmenuBar, drawMenu, XmNworkWindow, frame, NULL);
 
     XtAddCallback(drawArea, XmNinputCallback, DrawLineCB, drawArea);
     XtAddEventHandler(drawArea, ButtonMotionMask, False, InputLineEH, NULL);
