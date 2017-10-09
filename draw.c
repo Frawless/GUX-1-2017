@@ -191,6 +191,18 @@ void questionCB(Widget w, XtPointer client_data, XtPointer call_data)
     }
 }
 
+// TODO Udelat si tam ukladani hodnoty do prommne a na zaklade toho vybrat spravny obrazec/barvu atd
+void input_callback(Widget w, XtPointer client_data, XtPointer call_data)
+{
+    XmDrawingAreaCallbackStruct *cbs = (XmDrawingAreaCallbackStruct *)call_data;
+    Widget popup = (Widget)client_data;
+
+    if (cbs->event->xany.type != ButtonPress ||
+    	 cbs->event->xbutton.button != 3) return;
+    XmMenuPosition(popup, &cbs->event->xbutton);
+    XtManageChild(popup);
+}
+
 
 int main(int argc, char **argv)
 {
@@ -303,6 +315,7 @@ int main(int argc, char **argv)
       drawMenu, "chooseShape",
       shape, XK_S,
       0,
+      input_callback,
       XmVaPUSHBUTTON, spoint, XK_P, NULL, NULL,
       XmVaPUSHBUTTON, sline, XK_L, NULL, NULL,
       XmVaPUSHBUTTON, square, XK_S, NULL, NULL,
@@ -319,14 +332,15 @@ int main(int argc, char **argv)
 
     // Line width
     widthLine = XmStringCreateLocalized("Width:");
-    wzero = XmStringCreateLocalized("0");
-    wthree = XmStringCreateLocalized("3");
-    weight = XmStringCreateLocalized("8");
+    wzero = XmStringCreateLocalized(" 0 ");
+    wthree = XmStringCreateLocalized(" 3 ");
+    weight = XmStringCreateLocalized(" 8 ");
 
     lineSize = XmVaCreateSimpleOptionMenu(
       drawMenu, "lineSize",
       widthLine, XK_W,
       0,
+      input_callback,
       XmVaPUSHBUTTON, wzero, XK_Z, NULL, NULL,
       XmVaPUSHBUTTON, wthree, XK_T, NULL, NULL,
       XmVaPUSHBUTTON, weight, XK_E, NULL, NULL,
@@ -391,6 +405,6 @@ int main(int argc, char **argv)
 // nastavit barvu kreslené čáry (aspoň 4, ne jen black/white!); stačí barva popředí a pozadí; (použije se při šrafování!)
 // nastavit barvu pro vyplňování (aspoň 4, ne jen black/white!); opět stačí barva popředí a pozadí; (použilo by se pro vyplňování vzorkem)
 // zvolit mezi plnou nebo čárkovanou čarou typu LineDoubleDash (ne OnOffDash!) - nemusí se vztahovat na čáru tloušťky 0 (někde čárkovaní u tloušťky 0 nefungovalo);
-// smazat nakreslený obrázek tlačítkem nebo z aplikačního menu;
+// DONE smazat nakreslený obrázek tlačítkem nebo z aplikačního menu;
 // DONE: ukončit aplikaci tlačítkem nebo z aplikačního menu;
 // DONE: při opouštění aplikace musí být zobrazen dialog, který se ptá, zda skutečně skončit (aplikaci lze ukončit i zvolením Close v menu nabízeném WM!).
