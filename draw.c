@@ -50,7 +50,7 @@ int button_pressed = 0;		/* input state */
 GC gc;
 XGCValues gcv;
 Widget draw;
-String colours[] = {"Black", "Red", "Green", "Blue", "Grey", "White"};
+String colours[] = {"Black", "White", "Green", "Blue", "Red"};
 long int fill_pixel = 1;
 
 /* stores current colour of fill - black default */
@@ -63,12 +63,13 @@ Pixel foreground;
 
 // Enum types for buttons
 enum color {BLACK = 0, WHITE, GREEN, BLUE, RED};
-enum shape {POINT = 0, LINE, rectangle, CIRCLE};
+enum shape {POINT = 0, LINE, RECTANGLE, CIRCLE};
 enum width {WZERO = 0, WTHREE, WEIGHT};
 enum type {SOLID = 0, DASHED};
 enum fill {TRANSPARENT = 0, FILLED};
 
 int lineWidth[] = {0, 3, 8};
+int lineType[] = {LineSolid, LineDoubleDash};
 
 // Struc for config
 struct Config {
@@ -114,6 +115,7 @@ void ShapeChanger(Widget w, int width, int height)
     switch (config.shape) {
         case POINT:
             if (config.width > 0){
+                // https://tronche.com/gui/x/xlib/graphics/filling-areas/XFillArc.html
                 XFillArc(XtDisplay(w), XtWindow(w), inputGC, x1, y1, lineWidth[config.width], lineWidth[config.width], 0, 360*64);
             }
             else
@@ -122,7 +124,7 @@ void ShapeChanger(Widget w, int width, int height)
         case LINE:
             XDrawLine(XtDisplay(w), XtWindow(w), inputGC, x1, y1, x2, y2);
             break;
-        case rectangle:
+        case RECTANGLE:
             width = setWidth(x1, x2);
             height = setHeight(y1, y2);
             // Fill the shape
@@ -183,12 +185,7 @@ void InputShapeEH(Widget w, XtPointer client_data, XEvent *event, Boolean *cont)
       	y2 = event->xmotion.y;
 
         // LineDoubleDash = 2, LineSolid = 0
-        // TODO - predelat
-        if (config.type == SOLID)
-            XSetLineAttributes(XtDisplay(w), inputGC, lineWidth[config.width], LineSolid, CapRound, JoinRound);
-        else
-            XSetLineAttributes(XtDisplay(w), inputGC, lineWidth[config.width], LineDoubleDash, CapRound, JoinRound);
-
+        XSetLineAttributes(XtDisplay(w), inputGC, lineWidth[config.width], lineType[config.type], CapRound, JoinRound);
 
         ShapeChanger(w, width, height);
     }
