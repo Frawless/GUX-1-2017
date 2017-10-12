@@ -191,25 +191,58 @@ void questionCB(Widget w, XtPointer client_data, XtPointer call_data)
     }
 }
 
-// TODO Udelat si tam ukladani hodnoty do prommne a na zaklade toho vybrat spravny obrazec/barvu atd
-void input_callback(Widget w, XtPointer client_data, XtPointer call_data)
+void shapes_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    XmDrawingAreaCallbackStruct *cbs = (XmDrawingAreaCallbackStruct *)call_data;
-    Widget popup = (Widget)client_data;
+    fprintf(stderr, "Shape: %d\n",   (int)client_data); // Tady je ulozene cislo buttonu
+}
 
-    if (cbs->event->xany.type != ButtonPress ||
-    	 cbs->event->xbutton.button != 3) return;
-    XmMenuPosition(popup, &cbs->event->xbutton);
-    XtManageChild(popup);
+void width_callback(Widget w, XtPointer client_data, XtPointer call_data)
+{
+    fprintf(stderr, "Width: %d\n",   (int)client_data); // Tady je ulozene cislo buttonu
+}
+
+void color_buttons(Widget w, Widget parent, XmString color, String name)
+{
+    XmString black, green, red, blue;
+    // Shapes
+    black = XmStringCreateLocalized("Black");
+    green = XmStringCreateLocalized("Green");
+    blue = XmStringCreateLocalized("Blue");
+    red = XmStringCreateLocalized("Red");
+
+    w = XmVaCreateSimpleOptionMenu(
+      parent, name,
+      color, XK_C,
+      0,
+      shapes_callback,
+      XmVaPUSHBUTTON, black, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, green, XK_G, NULL, NULL,
+      XmVaPUSHBUTTON, blue, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, red, XK_R, NULL, NULL,
+      NULL);
+
+    XtManageChild(w);
+
+    XmStringFree(black);
+    XmStringFree(green);
+    XmStringFree(blue);
+    XmStringFree(red);
 }
 
 
 int main(int argc, char **argv)
 {
     XtAppContext app_context;
-    Widget topLevel, mainWin, frame, drawArea, menu, drawMenu, quitBtn, clearBtn, lineSize, chooseShape, chooseColor, question, box, button;
+    Widget topLevel,  mainWin, frame, drawArea, menu, drawMenu, colorMenu,
+                      quitBtn, clearBtn, lineSize, chooseShape, lineType,
+                      lineForeground, lineBackground,
+                      shapeForeground, shapeBackground,
+                      question, box, button;
     Atom wm_delete;
-    XmString colourss, shape, spoint, sline, square, scircle, widthLine, wzero, wthree, weight;
+    XmString  color, black, green, red, blue,
+              shape, spoint, sline, square, scircle,
+              widthLine, wzero, wthree, weight,
+              solid, dashed, type;
 
     char *fall[] = {
         "*question.dialogTitle: Quit question",
@@ -232,7 +265,7 @@ int main(int argc, char **argv)
       &argc, argv,			/* command line args */
       fall,
       XmNheight, (int)500,
-      XmNwidth, (int)500,
+      XmNwidth, (int)450,
       XmNdeleteResponse, XmDO_NOTHING,
       NULL);
 
@@ -268,7 +301,7 @@ int main(int argc, char **argv)
       KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask
       | Button1MotionMask );
 */
-// #######################################################
+// #############################################################################
     // App menu options
     menu = XtVaCreateManagedWidget(
       "menu",			/* widget name */
@@ -292,7 +325,7 @@ int main(int argc, char **argv)
       NULL);				/* terminate varargs list */
 
 
-// #######################################################
+// #############################################################################
     // Draw menu options
     drawMenu = XtVaCreateManagedWidget(
       "drawMenu",			/* widget name */
@@ -300,7 +333,7 @@ int main(int argc, char **argv)
       mainWin,				/* parent widget */
       XmNentryAlignment, XmALIGNMENT_CENTER,	/* alignment */
       XmNorientation, XmHORIZONTAL,	/* orientation */
-      XmNpacking, XmPACK_COLUMN,	/* packing mode */
+      XmNpacking, XmPACK_TIGHT,	/* packing mode */
   		// XmNscrolledWindowChildType, XmCOMMAND_WINDOW,
   		NULL);			/* terminate varargs list */
 
@@ -315,7 +348,7 @@ int main(int argc, char **argv)
       drawMenu, "chooseShape",
       shape, XK_S,
       0,
-      input_callback,
+      shapes_callback,
       XmVaPUSHBUTTON, spoint, XK_P, NULL, NULL,
       XmVaPUSHBUTTON, sline, XK_L, NULL, NULL,
       XmVaPUSHBUTTON, square, XK_S, NULL, NULL,
@@ -330,17 +363,17 @@ int main(int argc, char **argv)
     XmStringFree(scircle);
     XmStringFree(spoint);
 
-    // Line width
+// #############################################################################
     widthLine = XmStringCreateLocalized("Width:");
-    wzero = XmStringCreateLocalized(" 0 ");
-    wthree = XmStringCreateLocalized(" 3 ");
-    weight = XmStringCreateLocalized(" 8 ");
+    wzero = XmStringCreateLocalized(" 0 pt");
+    wthree = XmStringCreateLocalized(" 3 pt");
+    weight = XmStringCreateLocalized(" 8 pt");
 
     lineSize = XmVaCreateSimpleOptionMenu(
       drawMenu, "lineSize",
       widthLine, XK_W,
       0,
-      input_callback,
+      width_callback,
       XmVaPUSHBUTTON, wzero, XK_Z, NULL, NULL,
       XmVaPUSHBUTTON, wthree, XK_T, NULL, NULL,
       XmVaPUSHBUTTON, weight, XK_E, NULL, NULL,
@@ -353,12 +386,54 @@ int main(int argc, char **argv)
     XmStringFree(wthree);
     XmStringFree(weight);
 
-    // Color
-    chooseColor = XtVaCreateManagedWidget(
-      "chooseColor",				/* widget name */
-      xmPushButtonWidgetClass,		/* widget class */
-      drawMenu,			/* parent widget*/
-      NULL);				/* terminate varargs list */
+    // Line width
+    type = XmStringCreateLocalized("Line type:");
+    solid = XmStringCreateLocalized("solid");
+    dashed = XmStringCreateLocalized("dashed");
+
+    lineType = XmVaCreateSimpleOptionMenu(
+      drawMenu, "lineSize",
+      type, XK_T,
+      0,
+      width_callback,
+      XmVaPUSHBUTTON, solid, XK_S, NULL, NULL,
+      XmVaPUSHBUTTON, dashed, XK_D, NULL, NULL,
+      NULL);
+
+    XtManageChild(lineType);
+
+    XmStringFree(solid);
+    XmStringFree(dashed);
+
+// #############################################################################
+    // Color menu with buttons
+    colorMenu = XtVaCreateManagedWidget(
+      "colorMenu",			/* widget name */
+      xmRowColumnWidgetClass,		/* widget class */
+      mainWin,				/* parent widget */
+      XmNentryAlignment, XmALIGNMENT_CENTER,	/* alignment */
+      XmNorientation, XmHORIZONTAL,	/* orientation */
+      XmNpacking, XmPACK_COLUMN,	/* packing mode */
+      // XmNscrolledWindowChildType, XmCOMMAND_WINDOW,
+      NULL);			/* terminate varargs list */
+
+    color = XmStringCreateLocalized("LF:");
+    color_buttons(lineForeground, drawMenu, color, "lineForeground");
+    XmStringFree(color);
+
+    color = XmStringCreateLocalized("LB:");
+    color_buttons(lineBackground, drawMenu, color, "lineBackground");
+    XmStringFree(color);
+
+    color = XmStringCreateLocalized("SF:");
+    color_buttons(shapeForeground, drawMenu, color, "shapeForeground");
+    XmStringFree(color);
+
+    color = XmStringCreateLocalized("SB:");
+    color_buttons(shapeBackground, drawMenu, color, "shapeBackground");
+    XmStringFree(color);
+// #############################################################################
+
 
 
     XmMainWindowSetAreas(mainWin, menu, drawMenu, NULL, NULL, frame);
