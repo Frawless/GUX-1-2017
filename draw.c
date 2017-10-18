@@ -51,7 +51,14 @@ GC gc;
 XGCValues gcv;
 Widget draw;
 String colours[] = {"Black", "White", "Green", "Blue", "Red"};
+
+XColor black;
+
 long int fill_pixel = 1;
+long int lineFG = 1;
+long int lineBG = 1;
+long int shapeFG = 1;
+long int shapeBG = 1;
 
 /* stores current colour of fill - black default */
 Display *display;
@@ -59,7 +66,7 @@ Display *display;
 /* xlib id of display */
 Colormap cmap;
 
-Pixel foreground;
+Pixel foreground, backroundColor;
 
 // Enum types for buttons
 enum color {BLACK = 0, WHITE, GREEN, BLUE, RED};
@@ -109,19 +116,23 @@ int setHeight(int h1, int h2)
     }
 }
 
+
 // main switch for shape draw
-void ShapeChanger(Widget w, int width, int height)
+void ShapeChanger(Widget w, int width, int height, int point)
 {
     switch (config.shape) {
         case POINT:
-            if (config.width > 0){
-                // https://tronche.com/gui/x/xlib/graphics/filling-areas/XFillArc.html
-                XFillArc(XtDisplay(w), XtWindow(w), inputGC, x1, y1, lineWidth[config.width], lineWidth[config.width], 0, 360*64);
+            if (point){
+                if (config.width > 0){
+                    // https://tronche.com/gui/x/xlib/graphics/filling-areas/XFillArc.html
+                    XFillArc(XtDisplay(w), XtWindow(w), inputGC, x2, y2, lineWidth[config.width], lineWidth[config.width], 0, 360*64);
+                }
+                else
+                    XDrawPoint(XtDisplay(w), XtWindow(w), inputGC, x2, y2);
             }
-            else
-                XDrawPoint(XtDisplay(w), XtWindow(w), inputGC, x1, y1);
             break;
         case LINE:
+
             XDrawLine(XtDisplay(w), XtWindow(w), inputGC, x1, y1, x2, y2);
             break;
         case RECTANGLE:
@@ -170,11 +181,13 @@ void InputShapeEH(Widget w, XtPointer client_data, XEvent *event, Boolean *cont)
       	    XSetForeground(XtDisplay(w), inputGC, fg ^ bg);
       	}
 
+        XSetForeground(XtDisplay(w), inputGC, bg ^ lineFG);
+        XSetBackground(XtDisplay(w), inputGC, bg ^ lineBG);
 
       	if (button_pressed > 1) {
       	    /* erase previous position */
             // XSetLineAttributes(XtDisplay(w), inputGC, lineWidth[config.width], LineOnOffDash, CapRound, JoinRound);
-            ShapeChanger(w, width, height);
+            ShapeChanger(w, width, height, 0);
 
       	} else {
       	    /* remember first MotionNotify */
@@ -187,7 +200,7 @@ void InputShapeEH(Widget w, XtPointer client_data, XEvent *event, Boolean *cont)
         // LineDoubleDash = 2, LineSolid = 0
         XSetLineAttributes(XtDisplay(w), inputGC, lineWidth[config.width], lineType[config.type], CapRound, JoinRound);
 
-        ShapeChanger(w, width, height);
+        ShapeChanger(w, width, height, 1);
     }
 }
 
@@ -211,7 +224,7 @@ void DrawShapeCB(Widget w, XtPointer client_data, XtPointer call_data)
       	    break;
 
       	case ButtonRelease:
-      	    // if (d->event->xbutton.button == Button1) {
+      	     if (d->event->xbutton.button == Button1) {
             // 		if (++nlines > maxlines) {
             // 		    maxlines += LINES_ALLOC_STEP;
             // 		    lines = (XSegment*) XtRealloc((char*)lines,
@@ -223,7 +236,7 @@ void DrawShapeCB(Widget w, XtPointer client_data, XtPointer call_data)
             // 		lines[nlines - 1].x2 = d->event->xbutton.x;
             // 		lines[nlines - 1].y2 = d->event->xbutton.y;
             //
-            // 		button_pressed = 0;
+            		button_pressed = 0;
             //
             // 		if (!drawGC) {
             // 		    ac = 0;
@@ -234,7 +247,7 @@ void DrawShapeCB(Widget w, XtPointer client_data, XtPointer call_data)
             // 		}
             // 		XDrawLine(XtDisplay(w), XtWindow(w), drawGC,
             // 		  x1, y1, d->event->xbutton.x, d->event->xbutton.y);
-      	    // }
+      	     }
       	    break;
     }
 }
@@ -280,7 +293,7 @@ void QuitCB(Widget w, XtPointer client_data, XtPointer call_data)
 */
 void questionCB(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    switch ((int)client_data)
+    switch ((uintptr_t)client_data)
     {
         case 0: /* ok */
             exit(0);
@@ -292,53 +305,83 @@ void questionCB(Widget w, XtPointer client_data, XtPointer call_data)
 
 void shapes_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.shape = (int)client_data;
+    config.shape = (uintptr_t)client_data;
+
     fprintf(stderr, "Shape: %d\n",   config.shape); // Tady je ulozene cislo buttonu
 }
 
 void width_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.width = (int)client_data;
+    config.width = (uintptr_t)client_data;
     fprintf(stderr, "Width: %d\n",   config.width); // Tady je ulozene cislo buttonu
 }
 
 void type_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.type = (int)client_data;
+    config.type = (uintptr_t)client_data;
     fprintf(stderr, "Type: %d\n",   config.type); // Tady je ulozene cislo buttonu
 }
 
 void lf_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.lineForeground = (int)client_data;
+    config.lineForeground = (uintptr_t)client_data;
     fprintf(stderr, "lf_callback: %d\n",   config.lineForeground); // Tady je ulozene cislo buttonu
+    fprintf(stderr, "COLOR: %s\n", colours[(uintptr_t)client_data]);
+
+    XColor xcolour, spare;
+    if (XAllocNamedColor(display, cmap, colours[(uintptr_t)client_data], &xcolour, &spare) == 0)
+        return;			/* remember new colour */
+    lineFG = xcolour.pixel;
+    fprintf(stderr, "saved\n");
+
+    XtVaSetValues(w, XtNforeground, lineFG, NULL);
 }
 
 void lb_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.lineBackground= (int)client_data;
+    config.lineBackground= (uintptr_t)client_data;
     fprintf(stderr, "lb_callback: %d\n",   config.lineBackground); // Tady je ulozene cislo buttonu
+
+    XColor xcolour, spare;
+    if (XAllocNamedColor(display, cmap, colours[(uintptr_t)client_data], &xcolour, &spare) == 0)
+        return;			/* remember new colour */
+    lineBG = xcolour.pixel;
+
+    XtVaSetValues(w, XtNforeground, lineBG, NULL);
 }
 
 void sf_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.shapeForeground = (int)client_data;
+    config.shapeForeground = (uintptr_t)client_data;
     fprintf(stderr, "sf_callback: %d\n",   config.shapeForeground); // Tady je ulozene cislo buttonu
+    XColor xcolour, spare;
+    if (XAllocNamedColor(display, cmap, colours[(uintptr_t)client_data], &xcolour, &spare) == 0)
+        return;			/* remember new colour */
+    shapeFG = xcolour.pixel;
+
+    XtVaSetValues(w, XtNforeground, shapeFG, NULL);
 }
 
 void sb_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.shapeBackground= (int)client_data;
+    config.shapeBackground= (uintptr_t)client_data;
     fprintf(stderr, "sb_callback: %d\n",   config.shapeBackground); // Tady je ulozene cislo buttonu
+
+    XColor xcolour, spare;
+    if (XAllocNamedColor(display, cmap, colours[(uintptr_t)client_data], &xcolour, &spare) == 0)
+        return;			/* remember new colour */
+    shapeBG = xcolour.pixel;
+
+    XtVaSetValues(w, XtNforeground, shapeBG, NULL);
 }
 
 void fill_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.filled = (int)client_data;
+    config.filled = (uintptr_t)client_data;
     fprintf(stderr, "fill_callback: %d\n",   config.filled); // Tady je ulozene cislo buttonu
 }
 
-void color_buttons(Widget w, Widget parent, XmString color, String name, void *(callback)(Widget, XtPointer, XtPointer))
+void color_buttons(Widget w, Widget parent, XmString color, String name, void (callback)(Widget, XtPointer, XtPointer))
 {
     XmString black, green, red, blue, white;
     // Shapes
@@ -373,18 +416,25 @@ void color_buttons(Widget w, Widget parent, XmString color, String name, void *(
 int main(int argc, char **argv)
 {
     XtAppContext app_context;
-    Widget topLevel,  mainWin, frame, drawArea, menu, drawMenu, colorMenu,
+    Widget topLevel,  mainWin, frame, drawArea, menu,
+                      drawMenu, colorMenu, shapesMenu,
                       quitBtn, clearBtn, lineSize, chooseShape, lineType,
                       lineForeground, lineBackground,
                       shapeForeground, shapeBackground,
-                      question, box, button,
+                      question,
                       shapeFill;
     Atom wm_delete;
     XmString  color, black, green, red, blue, white,
               shape, spoint, sline, rectangle, scircle,
               widthLine, wzero, wthree, weight,
-              solid, dashed, type,
+              solid, dashed,
               filled, transparent;
+
+    // lineFG = black->pixel;
+    // lineBG = black.pixel;
+    // shapeFG = black.pixel;
+    // shapeBG = black.pixel;
+
 
     char *fall[] = {
         "*question.dialogTitle: Quit question",
@@ -407,7 +457,7 @@ int main(int argc, char **argv)
       &argc, argv,			/* command line args */
       fall,
       XmNheight, (int)500,
-      XmNwidth, (int)470,
+      XmNwidth, (int)500,
       XmNdeleteResponse, XmDO_NOTHING,
       NULL);
 
@@ -479,6 +529,28 @@ int main(int argc, char **argv)
   		// XmNscrolledWindowChildType, XmCOMMAND_WINDOW,
   		NULL);			/* terminate varargs list */
 
+    // Draw menu options
+    shapesMenu = XtVaCreateManagedWidget(
+      "shapesMenu",			/* widget name */
+      xmRowColumnWidgetClass,		/* widget class */
+      drawMenu,				/* parent widget */
+      XmNentryAlignment, XmALIGNMENT_CENTER,	/* alignment */
+      XmNorientation, XmHORIZONTAL,	/* orientation */
+      XmNpacking, XmPACK_TIGHT,	/* packing mode */
+  		// XmNscrolledWindowChildType, XmCOMMAND_WINDOW,
+  		NULL);			/* terminate varargs list */
+
+    // Draw menu options
+    colorMenu = XtVaCreateManagedWidget(
+      "colorMenu",			/* widget name */
+      xmRowColumnWidgetClass,		/* widget class */
+      drawMenu,				/* parent widget */
+      XmNentryAlignment, XmALIGNMENT_CENTER,	/* alignment */
+      XmNorientation, XmHORIZONTAL,	/* orientation */
+      XmNpacking, XmPACK_TIGHT,	/* packing mode */
+  		// XmNscrolledWindowChildType, XmCOMMAND_WINDOW,
+  		NULL);			/* terminate varargs list */
+
     // Shapes
     shape = XmStringCreateLocalized("Shape:");
     spoint = XmStringCreateLocalized("Point");
@@ -487,7 +559,7 @@ int main(int argc, char **argv)
     scircle = XmStringCreateLocalized("Circle");
 
     chooseShape = XmVaCreateSimpleOptionMenu(
-      drawMenu, "chooseShape",
+      shapesMenu, "chooseShape",
       shape, XK_S,
       0,
       shapes_callback,
@@ -512,7 +584,7 @@ int main(int argc, char **argv)
     weight = XmStringCreateLocalized(" 8 pt");
 
     lineSize = XmVaCreateSimpleOptionMenu(
-      drawMenu, "lineSize",
+      shapesMenu, "lineSize",
       widthLine, XK_W,
       0,
       width_callback,
@@ -529,12 +601,11 @@ int main(int argc, char **argv)
     XmStringFree(weight);
 
     // Line type
-    type = XmStringCreateLocalized("Line type:");
     solid = XmStringCreateLocalized("solid");
     dashed = XmStringCreateLocalized("dashed");
 
     lineType = XmVaCreateSimpleOptionMenu(
-      drawMenu, "lineSize",
+      shapesMenu, "lineSize",
       NULL, XK_T,
       0,
       type_callback,
@@ -552,7 +623,7 @@ int main(int argc, char **argv)
     transparent = XmStringCreateLocalized("transparent");
 
     shapeFill = XmVaCreateSimpleOptionMenu(
-      drawMenu, "shapeFill",
+      shapesMenu, "shapeFill",
       NULL, NULL,
       0,
       fill_callback,
@@ -565,28 +636,109 @@ int main(int argc, char **argv)
     XmStringFree(filled);
     XmStringFree(transparent);
 
+    cmap = DefaultColormapOfScreen(XtScreen(drawArea));
+    display = XtDisplay(drawArea);
+
 // #############################################################################
     color = XmStringCreateLocalized("LF:");
-    color_buttons(lineForeground, drawMenu, color, "lineForeground", lf_callback);
-    XmStringFree(color);
+
+    // Shapes
+    black = XmStringCreateLocalized("Black");
+    white = XmStringCreateLocalized("White");
+    green = XmStringCreateLocalized("Green");
+    blue = XmStringCreateLocalized("Blue");
+    red = XmStringCreateLocalized("Red");
+
+    lineForeground = XmVaCreateSimpleOptionMenu(
+      colorMenu, "lineForeground",
+      color, XK_C,
+      0,
+      lf_callback,
+      XmVaPUSHBUTTON, black, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, white, XK_W, NULL, NULL,
+      XmVaPUSHBUTTON, green, XK_G, NULL, NULL,
+      XmVaPUSHBUTTON, blue, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, red, XK_R, NULL, NULL,
+      NULL);
+
+    XtManageChild(lineForeground);
 
     color = XmStringCreateLocalized("LB:");
-    color_buttons(lineBackground, drawMenu, color, "lineBackground", lb_callback);
-    XmStringFree(color);
+
+    lineBackground = XmVaCreateSimpleOptionMenu(
+      colorMenu, "lineBackground",
+      color, XK_C,
+      0,
+      lb_callback,
+      XmVaPUSHBUTTON, black, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, white, XK_W, NULL, NULL,
+      XmVaPUSHBUTTON, green, XK_G, NULL, NULL,
+      XmVaPUSHBUTTON, blue, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, red, XK_R, NULL, NULL,
+      NULL);
+
+    XtManageChild(lineBackground);
 
     color = XmStringCreateLocalized("SF:");
-    color_buttons(shapeForeground, drawMenu, color, "shapeForeground", sf_callback);
-    XmStringFree(color);
+
+    shapeForeground = XmVaCreateSimpleOptionMenu(
+      colorMenu, "shapeForeground",
+      color, XK_C,
+      0,
+      sf_callback,
+      XmVaPUSHBUTTON, black, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, white, XK_W, NULL, NULL,
+      XmVaPUSHBUTTON, green, XK_G, NULL, NULL,
+      XmVaPUSHBUTTON, blue, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, red, XK_R, NULL, NULL,
+      NULL);
+
+    XtManageChild(shapeForeground);
 
     color = XmStringCreateLocalized("SB:");
-    color_buttons(shapeBackground, drawMenu, color, "shapeBackground", sb_callback);
+
+    shapeBackground = XmVaCreateSimpleOptionMenu(
+      colorMenu, "shapeBackground",
+      color, XK_C,
+      0,
+      sb_callback,
+      XmVaPUSHBUTTON, black, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, white, XK_W, NULL, NULL,
+      XmVaPUSHBUTTON, green, XK_G, NULL, NULL,
+      XmVaPUSHBUTTON, blue, XK_B, NULL, NULL,
+      XmVaPUSHBUTTON, red, XK_R, NULL, NULL,
+      NULL);
+
+    XtManageChild(shapeBackground);
+
+    XmStringFree(black);
+    XmStringFree(white);
+    XmStringFree(green);
+    XmStringFree(blue);
+    XmStringFree(red);
     XmStringFree(color);
+
+
 // #############################################################################
 
-
-
     XmMainWindowSetAreas(mainWin, menu, drawMenu, NULL, NULL, frame);
+    // Get backgorund color
+    XtVaGetValues(drawArea, XmNbackground, &backroundColor, NULL);
     // XtVaSetValues(mainWin, XmNmenuBar, drawMenu, XmNworkWindow, frame, NULL);
+
+    fprintf(stderr, "%ld\n", lineFG);
+
+    // Color of TEXT
+    XtVaSetValues(lineForeground, XtNforeground, lineFG, NULL);
+    XtVaSetValues(lineBackground, XtNforeground, lineBG, NULL);
+    XtVaSetValues(shapeForeground, XtNforeground, shapeFG, NULL);
+    XtVaSetValues(shapeBackground, XtNforeground, shapeBG, NULL);
+
+    XtAddCallback(lineForeground, XmNactivateCallback, lf_callback, lineForeground);
+    XtAddCallback(lineBackground, XmNactivateCallback, lf_callback, lineBackground);
+    XtAddCallback(shapeForeground, XmNactivateCallback, lf_callback, shapeForeground);
+    XtAddCallback(shapeBackground, XmNactivateCallback, lf_callback, shapeBackground);
+
 
     XtAddCallback(drawArea, XmNinputCallback, DrawShapeCB, drawArea);
     XtAddEventHandler(drawArea, ButtonMotionMask, False, InputShapeEH, NULL);
