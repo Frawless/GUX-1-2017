@@ -36,10 +36,10 @@
  * Shared variables
  */
 
-#define LINES_ALLOC_STEP	10	/* memory allocation stepping */
+#define STRUCT_ALLOC_STEP	2	/* memory allocation stepping */
 XSegment *lines = NULL;		/* array of line descriptors */
-int maxlines = 0;		/* space allocated for max lines */
-int nlines = 0;			/* current number of lines */
+int maxShapes = 0;		/* space allocated for max lines */
+int savedShapes = 0;			/* current number of lines */
 
 GC drawGC = 0;			/* GC used for final drawing */
 GC inputGC = 0;			/* GC used for drawing current position */
@@ -52,13 +52,11 @@ XGCValues gcv;
 Widget draw;
 String colours[] = {"Black", "White", "Green", "Blue", "Red"};
 
-XColor black;
-
 long int fill_pixel = 1;
-long int lineFG = 1;
-long int lineBG = 1;
-long int shapeFG = 1;
-long int shapeBG = 1;
+// long int lineFG = 1;
+// long int lineBG = 1;
+// long int shapeFG = 1;
+// long int shapeBG = 1;
 
 /* stores current colour of fill - black default */
 Display *display;
@@ -83,12 +81,22 @@ struct Config {
    int shape;
    int width;
    int type;
-   int lineForeground;
-   int lineBackground;
-   int shapeForeground;
-   int shapeBackground;
+   long int lineFG;
+   long int lineBG;
+   long int shapeFG;
+   long int shapeBG;
    int filled;
-} Config_def = {POINT, WTHREE, SOLID, BLACK, BLACK, BLACK, BLACK};
+} Config_def = {POINT, WTHREE, SOLID, BLACK, BLACK, BLACK, BLACK, TRANSPARENT};
+
+
+struct ExposedData {
+    int x1, x2, y1, y2;
+    int filled, type, width, shape;
+    long int fg, bg;
+    GC gc;
+};
+
+struct ExposedData *drawData = NULL;
 
 struct Config config;
 
@@ -117,12 +125,42 @@ int setHeight(int h1, int h2)
 }
 
 
+void saveScreen(Widget w)
+{
+    if(++savedShapes > maxShapes){
+        maxShapes += STRUCT_ALLOC_STEP;
+        drawData = (struct ExposedData*)realloc(drawData, sizeof(struct ExposedData) * maxShapes);
+        if (drawData == NULL){
+            fprintf(stderr, "Can't alloc enough memory! Termination in 3...\n");
+            exit(1);
+        }
+    }
+
+    drawData[savedShapes-1].x1 = x1;
+    drawData[savedShapes-1].x2 = x2;
+    drawData[savedShapes-1].y1 = y1;
+    drawData[savedShapes-1].y2 = y2;
+    drawData[savedShapes-1].filled = config.filled;
+    drawData[savedShapes-1].type = config.type;
+    drawData[savedShapes-1].width = config.width;
+    drawData[savedShapes-1].shape = config.shape;
+    drawData[savedShapes-1].fg = config.shapeFG;
+    drawData[savedShapes-1].bg = config.shapeBG;
+
+    drawData[savedShapes-1].gc = XCreateGC(XtDisplay(w), XtWindow(w), 0, NULL);
+    XSetForeground(XtDisplay(w), drawData[savedShapes-1].gc, config.lineFG);
+    XSetBackground(XtDisplay(w), drawData[savedShapes-1].gc, config.lineBG);
+    XCopyGC(XtDisplay(w), inputGC, GCLineWidth | GCLineStyle, drawData[savedShapes-1].gc);
+}
+
+
 // main switch for shape draw
-void ShapeChanger(Widget w, int width, int height, int point)
+void ShapeChanger(Widget w, int width, int height, int point, Pixel bg)
 {
     switch (config.shape) {
         case POINT:
             if (point){
+                saveScreen(w);
                 if (config.width > 0){
                     // https://tronche.com/gui/x/xlib/graphics/filling-areas/XFillArc.html
                     XFillArc(XtDisplay(w), XtWindow(w), inputGC, x2, y2, lineWidth[config.width], lineWidth[config.width], 0, 360*64);
@@ -140,7 +178,9 @@ void ShapeChanger(Widget w, int width, int height, int point)
             height = setHeight(y1, y2);
             // Fill the shape
             if (config.filled){
+                XSetForeground(XtDisplay(w), inputGC, bg ^ config.shapeFG);
                 XFillRectangle(XtDisplay(w), XtWindow(w), inputGC, xt, yt, width, height);
+                XSetForeground(XtDisplay(w), inputGC, bg ^ config.lineFG);
             }
             // Draw the shape
             XDrawRectangle(XtDisplay(w), XtWindow(w), inputGC, xt, yt, width, height);
@@ -154,7 +194,9 @@ void ShapeChanger(Widget w, int width, int height, int point)
             height = setHeight(y1, y2);
             // Fill the shape
             if (config.filled){
+                XSetForeground(XtDisplay(w), inputGC, bg ^ config.shapeFG);
                 XFillArc(XtDisplay(w), XtWindow(w), inputGC, x1 - width, y1 - height, 2 * width, 2 * height, 0, 360*64);
+                XSetForeground(XtDisplay(w), inputGC, bg ^ config.lineFG);
             }
             // Draw the shape
             XDrawArc(XtDisplay(w), XtWindow(w), inputGC, x1 - width, y1 - height, 2 * width, 2 * height, 0, 360*64);
@@ -171,23 +213,24 @@ void InputShapeEH(Widget w, XtPointer client_data, XEvent *event, Boolean *cont)
 {
     Pixel	fg, bg;
     int width, height;
+    width = height = 0;
 
     if (button_pressed) {
       	if (!inputGC) {
       	    inputGC = XCreateGC(XtDisplay(w), XtWindow(w), 0, NULL);
       	    XSetFunction(XtDisplay(w), inputGC, GXxor);
       	    XSetPlaneMask(XtDisplay(w), inputGC, ~0);
-      	    XtVaGetValues(w, XmNforeground, &fg, XmNbackground, &bg, NULL);
-      	    XSetForeground(XtDisplay(w), inputGC, fg ^ bg);
+
+      	    // XSetForeground(XtDisplay(w), inputGC, fg ^ bg);
       	}
-
-        XSetForeground(XtDisplay(w), inputGC, bg ^ lineFG);
-        XSetBackground(XtDisplay(w), inputGC, bg ^ lineBG);
-
+        XtVaGetValues(w, XmNforeground, &fg, XmNbackground, &bg, NULL);
+        XSetForeground(XtDisplay(w), inputGC, bg ^ config.lineFG);
+        XSetBackground(XtDisplay(w), inputGC, bg ^ config.lineBG);
+        // LineDoubleDash = 2, LineSolid = 0
+        XSetLineAttributes(XtDisplay(w), inputGC, lineWidth[config.width], lineType[config.type], CapRound, JoinRound);
       	if (button_pressed > 1) {
       	    /* erase previous position */
-            // XSetLineAttributes(XtDisplay(w), inputGC, lineWidth[config.width], LineOnOffDash, CapRound, JoinRound);
-            ShapeChanger(w, width, height, 0);
+            ShapeChanger(w, width, height, 0, bg);
 
       	} else {
       	    /* remember first MotionNotify */
@@ -197,10 +240,7 @@ void InputShapeEH(Widget w, XtPointer client_data, XEvent *event, Boolean *cont)
       	x2 = event->xmotion.x;
       	y2 = event->xmotion.y;
 
-        // LineDoubleDash = 2, LineSolid = 0
-        XSetLineAttributes(XtDisplay(w), inputGC, lineWidth[config.width], lineType[config.type], CapRound, JoinRound);
-
-        ShapeChanger(w, width, height, 1);
+        ShapeChanger(w, width, height, 1, bg);
     }
 }
 
@@ -209,46 +249,24 @@ void InputShapeEH(Widget w, XtPointer client_data, XEvent *event, Boolean *cont)
  */
 void DrawShapeCB(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    Arg al[4];
-    int ac;
-    XGCValues v;
     XmDrawingAreaCallbackStruct *d = (XmDrawingAreaCallbackStruct*) call_data;
 
     switch (d->event->type) {
-      	case ButtonPress:
-      	    if (d->event->xbutton.button == Button1) {
-            		button_pressed = 1;
-            		x1 = d->event->xbutton.x;
-            		y1 = d->event->xbutton.y;
-      	    }
-      	    break;
+        case ButtonPress:
+            if (d->event->xbutton.button == Button1) {
+                button_pressed = 1;
+                x1 = d->event->xbutton.x;
+                y1 = d->event->xbutton.y;
+            }
+            break;
 
-      	case ButtonRelease:
-      	     if (d->event->xbutton.button == Button1) {
-            // 		if (++nlines > maxlines) {
-            // 		    maxlines += LINES_ALLOC_STEP;
-            // 		    lines = (XSegment*) XtRealloc((char*)lines,
-            // 		      (Cardinal)(sizeof(XSegment) * maxlines));
-            // 		}
-            //
-            // 		lines[nlines - 1].x1 = x1;
-            // 		lines[nlines - 1].y1 = y1;
-            // 		lines[nlines - 1].x2 = d->event->xbutton.x;
-            // 		lines[nlines - 1].y2 = d->event->xbutton.y;
-            //
-            		button_pressed = 0;
-            //
-            // 		if (!drawGC) {
-            // 		    ac = 0;
-            // 		    XtSetArg(al[ac], XmNforeground, &v.foreground); ac++;
-            // 		    XtGetValues(w, al, ac);
-            // 		    drawGC = XCreateGC(XtDisplay(w), XtWindow(w),
-            // 			GCForeground, &v);
-            // 		}
-            // 		XDrawLine(XtDisplay(w), XtWindow(w), drawGC,
-            // 		  x1, y1, d->event->xbutton.x, d->event->xbutton.y);
-      	     }
-      	    break;
+        case ButtonRelease:
+            if (d->event->xbutton.button == Button1) {
+                saveScreen(w);
+                button_pressed = 0;
+                XClearArea(XtDisplay(w), XtWindow(w), 0, 0, 0, 0, True);
+            }
+            break;
     }
 }
 
@@ -259,12 +277,60 @@ void DrawShapeCB(Widget w, XtPointer client_data, XtPointer call_data)
 /* ARGSUSED */
 void ExposeCB(Widget w, XtPointer client_data, XtPointer call_data)
 {
+    XGCValues v;
+    int width, height, k;
+    width = height = 0;
 
-    if (nlines <= 0)
-	return;
-    if (!drawGC)
-	drawGC = XCreateGC(XtDisplay(w), XtWindow(w), 0, NULL);
-    XDrawSegments(XtDisplay(w), XtWindow(w), drawGC, lines, nlines);
+    if (savedShapes <= 0) {
+        return;
+    }
+
+    for(k = 0; k < savedShapes; k++)
+    {
+        XGetGCValues(XtDisplay(w), drawData[k].gc, GCForeground|GCBackground, &v);
+
+        switch (drawData[k].shape) {
+            case POINT:
+              if (drawData[k].width > 0){
+                  // https://tronche.com/gui/x/xlib/graphics/filling-areas/XFillArc.html
+                  XFillArc(XtDisplay(w), XtWindow(w), drawData[k].gc, drawData[k].x2, drawData[k].y2, lineWidth[drawData[k].width], lineWidth[drawData[k].width], 0, 360*64);
+              }
+              else
+                  XDrawPoint(XtDisplay(w), XtWindow(w), drawData[k].gc, drawData[k].x2, drawData[k].y2);
+                break;
+            case LINE:
+                XDrawLine(XtDisplay(w), XtWindow(w), drawData[k].gc, drawData[k].x1, drawData[k].y1, drawData[k].x2, drawData[k].y2);
+                break;
+            case RECTANGLE:
+                width = setWidth(drawData[k].x1, drawData[k].x2);
+                height = setHeight(drawData[k].y1, drawData[k].y2);
+                // Fill the shape
+                if (drawData[k].filled){
+                    XSetForeground(XtDisplay(w), drawData[k].gc, drawData[k].fg);
+                    XFillRectangle(XtDisplay(w), XtWindow(w), drawData[k].gc, xt, yt, width, height);
+                    XSetForeground(XtDisplay(w), drawData[k].gc, v.foreground);
+                }
+                // Draw the shape
+                XDrawRectangle(XtDisplay(w), XtWindow(w), drawData[k].gc, xt, yt, width, height);
+                break;
+            case CIRCLE:
+                // Cursor will set middle of the object, drag by x/y axis will set width and height of object
+                // count widht(setWidth) and height(setHeight)
+                // Start for draw will be middle point - width/height
+                // End will be 2x height/width
+                width = setWidth(drawData[k].x1, drawData[k].x2);
+                height = setHeight(drawData[k].y1, drawData[k].y2);
+                // Fill the shape
+                if (drawData[k].filled){
+                    XSetForeground(XtDisplay(w), drawData[k].gc, drawData[k].fg);
+                    XFillArc(XtDisplay(w), XtWindow(w), drawData[k].gc, drawData[k].x1 - width, drawData[k].y1 - height, 2 * width, 2 * height, 0, 360*64);
+                    XSetForeground(XtDisplay(w), drawData[k].gc, v.foreground);
+                }
+                // Draw the shape
+                XDrawArc(XtDisplay(w), XtWindow(w), drawData[k].gc, drawData[k].x1 - width, drawData[k].y1 - height, 2 * width, 2 * height, 0, 360*64);
+                break;
+        }
+    }
 }
 
 /*
@@ -275,7 +341,7 @@ void ClearCB(Widget w, XtPointer client_data, XtPointer call_data)
 {
     Widget wcd = (Widget) client_data;
 
-    nlines = 0;
+    savedShapes = 0;
     XClearWindow(XtDisplay(wcd), XtWindow(wcd));
 }
 
@@ -306,79 +372,61 @@ void questionCB(Widget w, XtPointer client_data, XtPointer call_data)
 void shapes_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
     config.shape = (uintptr_t)client_data;
-
-    fprintf(stderr, "Shape: %d\n",   config.shape); // Tady je ulozene cislo buttonu
 }
 
 void width_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
     config.width = (uintptr_t)client_data;
-    fprintf(stderr, "Width: %d\n",   config.width); // Tady je ulozene cislo buttonu
 }
 
 void type_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
     config.type = (uintptr_t)client_data;
-    fprintf(stderr, "Type: %d\n",   config.type); // Tady je ulozene cislo buttonu
 }
 
 void lf_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.lineForeground = (uintptr_t)client_data;
-    fprintf(stderr, "lf_callback: %d\n",   config.lineForeground); // Tady je ulozene cislo buttonu
-    fprintf(stderr, "COLOR: %s\n", colours[(uintptr_t)client_data]);
-
     XColor xcolour, spare;
     if (XAllocNamedColor(display, cmap, colours[(uintptr_t)client_data], &xcolour, &spare) == 0)
         return;			/* remember new colour */
-    lineFG = xcolour.pixel;
-    fprintf(stderr, "saved\n");
+    config.lineFG = xcolour.pixel;
 
-    XtVaSetValues(w, XtNforeground, lineFG, NULL);
+    XtVaSetValues(w, XtNforeground, config.lineFG, NULL);
 }
 
 void lb_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.lineBackground= (uintptr_t)client_data;
-    fprintf(stderr, "lb_callback: %d\n",   config.lineBackground); // Tady je ulozene cislo buttonu
-
     XColor xcolour, spare;
     if (XAllocNamedColor(display, cmap, colours[(uintptr_t)client_data], &xcolour, &spare) == 0)
         return;			/* remember new colour */
-    lineBG = xcolour.pixel;
+    config.lineBG = xcolour.pixel;
 
-    XtVaSetValues(w, XtNforeground, lineBG, NULL);
+    XtVaSetValues(w, XtNforeground, config.lineBG, NULL);
 }
 
 void sf_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.shapeForeground = (uintptr_t)client_data;
-    fprintf(stderr, "sf_callback: %d\n",   config.shapeForeground); // Tady je ulozene cislo buttonu
     XColor xcolour, spare;
     if (XAllocNamedColor(display, cmap, colours[(uintptr_t)client_data], &xcolour, &spare) == 0)
         return;			/* remember new colour */
-    shapeFG = xcolour.pixel;
+    config.shapeFG = xcolour.pixel;
 
-    XtVaSetValues(w, XtNforeground, shapeFG, NULL);
+    XtVaSetValues(w, XtNforeground, config.shapeFG, NULL);
 }
 
 void sb_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
-    config.shapeBackground= (uintptr_t)client_data;
-    fprintf(stderr, "sb_callback: %d\n",   config.shapeBackground); // Tady je ulozene cislo buttonu
-
     XColor xcolour, spare;
     if (XAllocNamedColor(display, cmap, colours[(uintptr_t)client_data], &xcolour, &spare) == 0)
         return;			/* remember new colour */
-    shapeBG = xcolour.pixel;
+    config.shapeBG = xcolour.pixel;
 
-    XtVaSetValues(w, XtNforeground, shapeBG, NULL);
+    XtVaSetValues(w, XtNforeground, config.shapeBG, NULL);
 }
 
 void fill_callback(Widget w, XtPointer client_data, XtPointer call_data)
 {
     config.filled = (uintptr_t)client_data;
-    fprintf(stderr, "fill_callback: %d\n",   config.filled); // Tady je ulozene cislo buttonu
 }
 
 void color_buttons(Widget w, Widget parent, XmString color, String name, void (callback)(Widget, XtPointer, XtPointer))
@@ -430,11 +478,7 @@ int main(int argc, char **argv)
               solid, dashed,
               filled, transparent;
 
-    // lineFG = black->pixel;
-    // lineBG = black.pixel;
-    // shapeFG = black.pixel;
-    // shapeBG = black.pixel;
-
+    XColor init;
 
     char *fall[] = {
         "*question.dialogTitle: Quit question",
@@ -624,7 +668,7 @@ int main(int argc, char **argv)
 
     shapeFill = XmVaCreateSimpleOptionMenu(
       shapesMenu, "shapeFill",
-      NULL, NULL,
+      NULL, XK_T,
       0,
       fill_callback,
       XmVaPUSHBUTTON, transparent, XK_T, NULL, NULL,
@@ -638,6 +682,13 @@ int main(int argc, char **argv)
 
     cmap = DefaultColormapOfScreen(XtScreen(drawArea));
     display = XtDisplay(drawArea);
+
+    XAllocNamedColor(display, cmap, "Black", &init, &init);
+
+    config.lineFG = init.pixel;
+    config.lineBG = init.pixel;
+    config.shapeFG = init.pixel;
+    config.shapeBG = init.pixel;
 
 // #############################################################################
     color = XmStringCreateLocalized("LF:");
@@ -726,18 +777,16 @@ int main(int argc, char **argv)
     XtVaGetValues(drawArea, XmNbackground, &backroundColor, NULL);
     // XtVaSetValues(mainWin, XmNmenuBar, drawMenu, XmNworkWindow, frame, NULL);
 
-    fprintf(stderr, "%ld\n", lineFG);
-
     // Color of TEXT
-    XtVaSetValues(lineForeground, XtNforeground, lineFG, NULL);
-    XtVaSetValues(lineBackground, XtNforeground, lineBG, NULL);
-    XtVaSetValues(shapeForeground, XtNforeground, shapeFG, NULL);
-    XtVaSetValues(shapeBackground, XtNforeground, shapeBG, NULL);
-
-    XtAddCallback(lineForeground, XmNactivateCallback, lf_callback, lineForeground);
-    XtAddCallback(lineBackground, XmNactivateCallback, lf_callback, lineBackground);
-    XtAddCallback(shapeForeground, XmNactivateCallback, lf_callback, shapeForeground);
-    XtAddCallback(shapeBackground, XmNactivateCallback, lf_callback, shapeBackground);
+    // XtVaSetValues(lineForeground, XtNforeground, config.lineFG, NULL);
+    // XtVaSetValues(lineBackground, XtNforeground, config.lineBG, NULL);
+    // XtVaSetValues(shapeForeground, XtNforeground, config.shapeFG, NULL);
+    // XtVaSetValues(shapeBackground, XtNforeground, config.shapeBG, NULL);
+    //
+    // XtAddCallback(lineForeground, XmNactivateCallback, lf_callback, lineForeground);
+    // XtAddCallback(lineBackground, XmNactivateCallback, lf_callback, lineBackground);
+    // XtAddCallback(shapeForeground, XmNactivateCallback, lf_callback, shapeForeground);
+    // XtAddCallback(shapeBackground, XmNactivateCallback, lf_callback, shapeBackground);
 
 
     XtAddCallback(drawArea, XmNinputCallback, DrawShapeCB, drawArea);
@@ -772,14 +821,14 @@ int main(int argc, char **argv)
 }
 
 // TODO
-// vykreslovat body, úsečky, obdélníky a elipsy, kde obdélníky a elipsy mohou být nevyplněné nebo vyplněné s obrysem;
-// u elipsy se stiskem tlačítka označí střed elipsy a tažením myší se určí její x-ový a y-ový poloměr;
-// Při tažení se objekt vykresluje (může být libovolný typ čáry, barva, šířka)!
+// DONE: vykreslovat body, úsečky, obdélníky a elipsy, kde obdélníky a elipsy mohou být nevyplněné nebo vyplněné s obrysem;
+// DONE: u elipsy se stiskem tlačítka označí střed elipsy a tažením myší se určí její x-ový a y-ový poloměr;
+// DONE: Při tažení se objekt vykresluje (může být libovolný typ čáry, barva, šířka)!
 // DONE: nastavit šířku čáry s alespoň 3 různými hodnotami včetně 0;
 // DONE: šířka čáry určuje i velikost bodů, proto u bodů pro šířku 0 použijte funkci XDrawPoint() a u jiných šířek funkci XFillArc();
 // DONE: (Maximální šířka musi byt alespoň 8bodů - např. 0-3-8 !)
-// nastavit barvu kreslené čáry (aspoň 4, ne jen black/white!); stačí barva popředí a pozadí; (použije se při šrafování!)
-// nastavit barvu pro vyplňování (aspoň 4, ne jen black/white!); opět stačí barva popředí a pozadí; (použilo by se pro vyplňování vzorkem)
+// DONE: nastavit barvu kreslené čáry (aspoň 4, ne jen black/white!); stačí barva popředí a pozadí; (použije se při šrafování!)
+// DONE: nastavit barvu pro vyplňování (aspoň 4, ne jen black/white!); opět stačí barva popředí a pozadí; (použilo by se pro vyplňování vzorkem)
 // DONE: zvolit mezi plnou nebo čárkovanou čarou typu LineDoubleDash (ne OnOffDash!) - nemusí se vztahovat na čáru tloušťky 0 (někde čárkovaní u tloušťky 0 nefungovalo);
 // DONE smazat nakreslený obrázek tlačítkem nebo z aplikačního menu;
 // DONE: ukončit aplikaci tlačítkem nebo z aplikačního menu;
