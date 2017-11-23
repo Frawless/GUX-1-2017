@@ -20,7 +20,7 @@
 #include <Xm/PushB.h>
 #include <Xm/RowColumn.h>
 
-#include <Xm/CascadeB.h>
+// #include <Xm/CascadeB.h>
 
 #include <Xm/Protocols.h>
 #include <X11/Xmu/Editres.h>
@@ -31,6 +31,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 /*
  * Shared variables
