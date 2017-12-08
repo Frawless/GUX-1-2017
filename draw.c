@@ -122,6 +122,7 @@ int setHeight(int h1, int h2)
 // Function for save shape into struct
 void saveScreen(Widget w)
 {
+
     if(++savedShapes > maxShapes){
         maxShapes += STRUCT_ALLOC_STEP;
         drawData = (struct ExposedData*)realloc(drawData, sizeof(struct ExposedData) * maxShapes);
@@ -210,9 +211,11 @@ void InputShapeEH(Widget w, XtPointer client_data, XEvent *event, Boolean *cont)
 
     if (button_pressed) {
       	if (!inputGC) {
-      	    inputGC = XCreateGC(XtDisplay(w), XtWindow(w), 0, NULL);
+            inputGC = XCreateGC(XtDisplay(w), XtWindow(w), 0, NULL);
       	    XSetFunction(XtDisplay(w), inputGC, GXxor);
       	    XSetPlaneMask(XtDisplay(w), inputGC, ~0);
+      	    XtVaGetValues(w, XmNforeground, &fg, XmNbackground, &bg, NULL);
+      	    XSetForeground(XtDisplay(w), inputGC, fg ^ bg);
       	}
         XtVaGetValues(w, XmNforeground, &fg, XmNbackground, &bg, NULL);
         XSetForeground(XtDisplay(w), inputGC, bg ^ config.lineFG);
@@ -253,8 +256,25 @@ void DrawShapeCB(Widget w, XtPointer client_data, XtPointer call_data)
 
         case ButtonRelease:
             if (d->event->xbutton.button == Button1) {
-                saveScreen(w);
+
                 button_pressed = 0;
+
+                x2 = d->event->xbutton.x;
+                y2 = d->event->xbutton.y;
+
+                // It's neccesary to create inputGC before first save (segfault without it)
+                // from template!
+                if (!inputGC) {
+              		  Pixel fg, bg;
+              	    inputGC = XCreateGC(XtDisplay(w), XtWindow(w), 0, NULL);
+              	    XSetFunction(XtDisplay(w), inputGC, GXxor);
+              	    XSetPlaneMask(XtDisplay(w), inputGC, ~0);
+              	    XtVaGetValues(w, XmNforeground, &fg, XmNbackground, &bg, NULL);
+              	    XSetForeground(XtDisplay(w), inputGC, fg ^ bg);
+              	}
+
+                saveScreen(w);
+
                 XClearArea(XtDisplay(w), XtWindow(w), 0, 0, 0, 0, True);
             }
             break;
@@ -352,7 +372,7 @@ void questionCB(Widget w, XtPointer client_data, XtPointer call_data)
             for(x = 0; x < savedShapes; x++)
                 XFreeGC(XtDisplay(w), drawData[x].gc);
 
-            XFreeGC(XtDisplay(w), inputGC);
+            // XFreeGC(XtDisplay(w), inputGC);
             exit(0);
             break;
         case 1: /* cancel */
